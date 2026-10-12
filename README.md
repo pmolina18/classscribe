@@ -48,7 +48,7 @@ Mac can play.
 ## Install
 
 ```bash
-git clone https://github.com/pablomolina/classscribe.git
+git clone https://github.com/pmolina18/classscribe.git
 cd classscribe
 pip install -e .
 ```

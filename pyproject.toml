@@ -14,8 +14,8 @@ keywords = ["whisper", "transcription", "study-notes", "groq", "macos", "blackho
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/pablomolina/classscribe"
-Issues = "https://github.com/pablomolina/classscribe/issues"
+Homepage = "https://github.com/pmolina18/classscribe"
+Issues = "https://github.com/pmolina18/classscribe/issues"
 
 [project.scripts]
 classscribe = "classscribe.cli:main"
