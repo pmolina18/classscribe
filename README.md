@@ -1,18 +1,18 @@
 # ClassScribe
 
-**Turn any audio playing on your Mac into study notes — local or cloud transcription, free AI summaries.**
+**Turn any audio playing on your Mac into study notes — local or cloud transcription, free AI summaries and diagrams.**
 
 ClassScribe captures the internal audio of your Mac (a lecture video, a recorded
 call, a podcast), transcribes it with [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 (local, offline, Metal-accelerated) or via [Groq Cloud](https://console.groq.com)
-(free tier, no local GPU needed), and generates a study **summary** and
-**outline** with a free LLM. All free, no subscriptions.
+(free tier, no local GPU needed), and generates a study **summary**, **outline**
+and **Mermaid diagram** with a free LLM. All free, no subscriptions.
 
 ```
-┌───────────┐     ┌──────────────┐     ┌─────────────────────┐     ┌──────────────────┐
-│  System   │ ──▶ │  BlackHole   │ ──▶ │  Transcription:     │ ──▶ │  LLM (Groq free) │
-│  audio    │     │ (virtual mic)│     │  whisper.cpp / Groq │     │  summary+outline │
-└───────────┘     └──────────────┘     └─────────────────────┘     └──────────────────┘
+┌───────────┐     ┌──────────────┐     ┌─────────────────────┐     ┌───────────────────────┐
+│  System   │ ──▶ │  BlackHole   │ ──▶ │  Transcription:     │ ──▶ │  LLM (Groq free)      │
+│  audio    │     │ (virtual mic)│     │  whisper.cpp / Groq │     │  summary+outline+diagram│
+└───────────┘     └──────────────┘     └─────────────────────┘     └───────────────────────┘
      play a lecture      ffmpeg capture      .txt/.srt/.vtt              .md study notes
 ```
 
@@ -35,8 +35,9 @@ Mac can play.
   - `local` — whisper.cpp + `large-v3-turbo`, offline, private, GPU-accelerated (**available now**).
   - `groq` — Groq Cloud free tier, no local GPU or model download needed (**coming soon**, default).
 - 🧠 **Free AI summaries** via [Groq Cloud](https://console.groq.com) (free tier), or any OpenAI-compatible endpoint — including **Ollama** for 100% local, private summaries.
-- 🧩 **Outputs**: `.txt`, `.srt`, `.vtt` transcripts + `-summary.md` and `-outline.md`.
-- 🛠️ **One command**: `classscribe pipeline` records → transcribes → summarizes.
+- 📊 **Mermaid diagrams** from the lecture content — mindmap, timeline, flowchart, or `auto`. Renders natively on GitHub, VS Code and Obsidian; no image API, no extra key.
+- 🧩 **Outputs**: `.txt`, `.srt`, `.vtt` transcripts + `-summary.md`, `-outline.md` and `-diagram.md`.
+- 🛠️ **One command**: `classscribe pipeline` records → transcribes → summarizes → diagrams.
 - 🔎 **`classscribe config`** prints the effective configuration at any time.
 
 ## Requirements (all free)
@@ -84,8 +85,13 @@ To capture what you hear *and* keep hearing it, create a **Multi-Output Device**
 Get a free key at [console.groq.com/keys](https://console.groq.com/keys), then:
 
 ```bash
-export GROQ_API_KEY="gsk_..."
+export GROQ_API_KEY="your-groq-key"
 ```
+
+> Groq rotates its model lineup. ClassScribe defaults to a current production
+> model (`openai/gpt-oss-20b`); if you ever get a `model_not_found` error, pick
+> another from [console.groq.com/docs/models](https://console.groq.com/docs/models)
+> and set it via `[llm] model` in your config.
 
 Prefer **fully local** summaries? Run [Ollama](https://ollama.com) and point the
 config at it — see `.classscribe.toml.example`. No API key, nothing leaves your Mac.
@@ -117,6 +123,34 @@ classscribe summarize ~/ClassScribe/transcripts/my-lecture-*.txt
 classscribe transcribe ~/Downloads/lecture.mp4 --language es --transcription-provider local
 ```
 
+**Make a diagram from a transcript** (summaries and diagrams use the cloud LLM,
+so no `--transcription-provider` needed):
+
+```bash
+classscribe summarize ~/ClassScribe/transcripts/my-lecture.txt
+classscribe diagram   ~/ClassScribe/transcripts/my-lecture.txt --diagram-type auto
+```
+
+The `-diagram.md` contains a Mermaid block that renders directly on GitHub:
+
+```mermaid
+mindmap
+  root((Course topics))
+    Intro((Introduction))
+      1((What is politics))
+      2((Political power))
+    Structure((As structure))
+      6((The State))
+      8((Democracy))
+    Process((As process))
+      23((Parties))
+```
+
+> Diagrams are LLM-generated and *occasionally* need a tiny manual edit (a
+> stray label character). ClassScribe extracts the Mermaid block automatically;
+> if the model returns no valid block, the raw response is kept with a warning
+> so you never lose output.
+
 **See the resolved configuration** (handy for debugging; secrets are redacted):
 
 ```bash
@@ -135,6 +169,7 @@ env vars. Precedence: **CLI flag > env var > config file > built-in default**.
 | Workspace folder | `--workspace` | `CLASSSCRIBE_WORKSPACE` | `workspace` |
 | Language | `--language` | `CLASSSCRIBE_LANGUAGE` | `language` |
 | Transcription backend | `--transcription-provider` | `CLASSSCRIBE_TRANSCRIPTION_PROVIDER` | `[transcription] provider` |
+| Diagram type | `--diagram-type` | `CLASSSCRIBE_DIAGRAM_TYPE` | `[diagrams] type` |
 | LLM API key | — | `GROQ_API_KEY` | `[llm] api_key_env` |
 
 Run `classscribe config` to see exactly what is in effect.
@@ -144,10 +179,10 @@ Run `classscribe config` to see exactly what is in effect.
 - **`local` transcription stays on your Mac** — whisper.cpp is fully offline.
 - **`groq` transcription** (when available) sends your audio to Groq's free-tier
   cloud API.
-- **Summaries** send the *transcript text* to the LLM endpoint you choose. With
-  Groq that's a free-tier cloud call; with Ollama it stays local.
-- Groq's free tier has rate limits and a 25 MB per-file cap (fine for class
-  notes). No credit card.
+- **Summaries and diagrams** send the *transcript text* to the LLM endpoint you
+  choose. With Groq that's a free-tier cloud call; with Ollama it stays local.
+- Groq's free tier has rate limits and a 100 MB per-file cap for transcription
+  (fine for class recordings). No credit card.
 
 ## License
 
