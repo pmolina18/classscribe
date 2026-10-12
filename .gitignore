@@ -1,0 +1,34 @@
+# Models (large binaries — downloaded via `classscribe setup`)
+*.bin
+models/
+
+# User data
+ClassScribe/
+recordings/
+transcripts/
+summaries/
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.mkv
+*.srt
+*.vtt
+
+# Local config & secrets
+.classscribe.toml
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# macOS
+.DS_Store

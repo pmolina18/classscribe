@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "classscribe"
+version = "0.1.0"
+description = "Record internal Mac audio, transcribe it locally with whisper.cpp, and summarize with a free LLM."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Pablo Molina" }]
+keywords = ["whisper", "transcription", "study-notes", "groq", "macos", "blackhole"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/pablomolina/classscribe"
+Issues = "https://github.com/pablomolina/classscribe/issues"
+
+[project.scripts]
+classscribe = "classscribe.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["classscribe*"]

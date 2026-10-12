@@ -1,0 +1,23 @@
+# ClassScribe configuration (copy to .classscribe.toml and edit).
+# All fields are optional; defaults are shown.
+
+# Base folder where recordings, transcripts and summaries are stored.
+workspace = "~/ClassScribe"
+
+# Whisper language code. Leave empty "" for auto-detect. e.g. "es", "en".
+language = ""
+
+# Optional: override the whisper.cpp model path (defaults to <workspace>/models).
+# model_path = "~/ClassScribe/models/ggml-large-v3-turbo.bin"
+
+[llm]
+# Any OpenAI-compatible chat endpoint.
+# Groq Cloud (free tier) — default:
+base_url = "https://api.groq.com/openai/v1"
+model = "llama-3.3-70b-versatile"
+api_key_env = "GROQ_API_KEY"
+
+# Fully local & private alternative (Ollama) — no API key needed:
+# base_url = "http://localhost:11434/v1"
+# model = "llama3.1"
+# api_key_env = "OLLAMA_API_KEY"
