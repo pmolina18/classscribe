@@ -5,12 +5,18 @@ Uploads audio to `POST {base_url}/audio/transcriptions` with
 returned segments — matching the local whisper.cpp backend's outputs.
 
 No third-party SDK: the multipart/form-data body is assembled by hand with
-urllib, keeping dependencies at zero. Groq free tier allows files up to 100 MB.
+urllib, keeping dependencies at zero. Groq free tier allows files up to 100 MB,
+so audio is first compressed to 32 kbps mono AAC (~0.24 MB/min, i.e. hours of
+speech) when ffmpeg is available.
 """
 from __future__ import annotations
 
 import json
 import mimetypes
+import shutil
+import subprocess
+import sys
+import tempfile
 import urllib.error
 import urllib.request
 import uuid
@@ -20,6 +26,36 @@ from .transcriber import TranscribeError
 
 # Groq's documented hard cap for the free/dev tier (per console.groq.com/docs).
 GROQ_MAX_FILE_BYTES = 100 * 1024 * 1024
+
+# Speech-optimised upload encoding: mono, 16 kHz, 32 kbps AAC. Whisper works at
+# 16 kHz internally, so this loses nothing that matters for transcription.
+UPLOAD_BITRATE = "32k"
+
+# mimetypes has no reliable entry for .m4a on every platform.
+_MIME_OVERRIDES = {".m4a": "audio/mp4"}
+
+
+def _compress_for_upload(source: Path, workdir: Path) -> Path:
+    """Re-encode `source` as compact mono AAC in `workdir` for upload.
+
+    Falls back to the original file if ffmpeg is missing or encoding fails,
+    so a broken ffmpeg never blocks a transcription that would fit anyway.
+    """
+    if shutil.which("ffmpeg") is None:
+        return source
+    out = workdir / f"{source.stem}.m4a"
+    print("Compressing audio for upload...")
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-i", str(source), "-vn", "-ac", "1", "-ar", "16000",
+         "-c:a", "aac", "-b:a", UPLOAD_BITRATE, str(out)],
+        capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0 or not out.is_file() or out.stat().st_size == 0:
+        print("warning: compression failed; uploading the original file.",
+              file=sys.stderr)
+        return source
+    return out
 
 
 def _version() -> str:
@@ -76,7 +112,9 @@ def _multipart_body(
         parts.append(b"")
         parts.append(value.encode("utf-8"))
 
-    mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    mime = (_MIME_OVERRIDES.get(file_path.suffix.lower())
+            or mimetypes.guess_type(file_path.name)[0]
+            or "application/octet-stream")
     parts.append(f"--{boundary}".encode())
     parts.append(
         f'Content-Disposition: form-data; name="file"; '
@@ -110,21 +148,24 @@ def transcribe_groq(
             "configured key env var), or use --transcription-provider local."
         )
 
-    size = source.stat().st_size
-    if size > GROQ_MAX_FILE_BYTES:
-        mb = size / (1024 * 1024)
-        raise TranscribeError(
-            f"File is {mb:.0f} MB, over Groq's 100 MB limit. Compress/segment "
-            "it, or use --transcription-provider local (no size limit)."
-        )
-
     out_base.parent.mkdir(parents=True, exist_ok=True)
 
     fields = {"model": model, "response_format": "verbose_json"}
     if language:
         fields["language"] = language
 
-    body, content_type = _multipart_body(source, fields)
+    # The compressed copy only needs to live until the body is built in memory.
+    with tempfile.TemporaryDirectory() as tmp:
+        upload = _compress_for_upload(source, Path(tmp))
+        size = upload.stat().st_size
+        if size > GROQ_MAX_FILE_BYTES:
+            mb = size / (1024 * 1024)
+            raise TranscribeError(
+                f"Audio is {mb:.0f} MB even after compression, over Groq's "
+                "100 MB limit. Use --transcription-provider local (no size "
+                "limit) or split the recording."
+            )
+        body, content_type = _multipart_body(upload, fields)
     url = base_url.rstrip("/") + "/audio/transcriptions"
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Content-Type", content_type)

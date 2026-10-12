@@ -198,11 +198,10 @@ backend talks to the same endpoint as the LLM, so it won't work against Ollama.
 ## Privacy and cost
 
 - The **local** backend never sends audio anywhere.
-- The **groq** backend uploads your audio to Groq. The free tier accepts files
-  up to 100 MB. ClassScribe's recordings are 16 kHz mono WAV, about 1.9 MB per
-  minute, so that limit is roughly 50 minutes of recording. For longer
-  lectures, use the local backend (no size limit) or transcribe a compressed
-  copy (an m4a or mp3 of the same lecture is far smaller).
+- The **groq** backend uploads your audio to Groq. Before uploading,
+  ClassScribe compresses it to 32 kbps mono AAC (about 0.23 MB per minute), so
+  Groq's 100 MB free-tier limit covers roughly 7 hours of recording. Whisper
+  works at 16 kHz internally, so the compression costs nothing in accuracy.
 - Summaries and diagrams send the **transcript text** to whichever LLM you
   configure: Groq by default, or Ollama if you want it to stay local.
 - Groq's free tier needs no credit card. It does have rate limits; check
