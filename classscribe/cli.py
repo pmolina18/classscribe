@@ -15,7 +15,11 @@ import sys
 from pathlib import Path
 
 from . import recorder, summarizer, transcriber
-from .config import VALID_TRANSCRIPTION_PROVIDERS, load_config
+from .config import (
+    VALID_DIAGRAM_TYPES,
+    VALID_TRANSCRIPTION_PROVIDERS,
+    load_config,
+)
 
 
 def _add_common(p: argparse.ArgumentParser) -> None:
@@ -25,6 +29,11 @@ def _add_common(p: argparse.ArgumentParser) -> None:
         "--transcription-provider", dest="transcription_provider",
         choices=VALID_TRANSCRIPTION_PROVIDERS,
         help="Transcription backend (default: groq).",
+    )
+    p.add_argument(
+        "--diagram-type", dest="diagram_type",
+        choices=VALID_DIAGRAM_TYPES,
+        help="Mermaid diagram type (default: auto).",
     )
 
 
@@ -84,6 +93,17 @@ def cmd_summarize(args, cfg) -> int:
     return 0
 
 
+def cmd_diagram(args, cfg) -> int:
+    cfg.ensure_dirs()
+    out = summarizer.diagram(
+        Path(args.transcript).expanduser(), cfg.summaries_dir,
+        cfg.llm_base_url, cfg.llm_model, cfg.llm_api_key(),
+        diagram_type=cfg.diagram_type,
+    )
+    print(f"\nDiagram: {out['diagram']}")
+    return 0
+
+
 def cmd_pipeline(args, cfg) -> int:
     cfg.ensure_dirs()
     wav = recorder.record(cfg.recordings_dir, label=args.label)
@@ -92,7 +112,12 @@ def cmd_pipeline(args, cfg) -> int:
         outputs["txt"], cfg.summaries_dir,
         cfg.llm_base_url, cfg.llm_model, cfg.llm_api_key(),
     )
-    print("\nDone: recording -> transcript -> summary + outline.")
+    summarizer.diagram(
+        outputs["txt"], cfg.summaries_dir,
+        cfg.llm_base_url, cfg.llm_model, cfg.llm_api_key(),
+        diagram_type=cfg.diagram_type,
+    )
+    print("\nDone: recording -> transcript -> summary + outline + diagram.")
     return 0
 
 
@@ -117,6 +142,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("transcript"); _add_common(p)
     p.set_defaults(func=cmd_summarize)
 
+    p = sub.add_parser("diagram", help="Make a Mermaid diagram from a transcript.")
+    p.add_argument("transcript"); _add_common(p)
+    p.set_defaults(func=cmd_diagram)
+
     p = sub.add_parser("pipeline", help="record -> transcribe -> summarize.")
     p.add_argument("label", nargs="?")
     _add_common(p); p.set_defaults(func=cmd_pipeline)
@@ -131,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             workspace=getattr(args, "workspace", None),
             language=getattr(args, "language", None),
             transcription_provider=getattr(args, "transcription_provider", None),
+            diagram_type=getattr(args, "diagram_type", None),
         )
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)

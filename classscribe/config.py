@@ -34,6 +34,9 @@ DEFAULT_TRANSCRIPTION_PROVIDER = "groq"
 VALID_TRANSCRIPTION_PROVIDERS = ("groq", "local")
 DEFAULT_GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
 
+# Keep in sync with summarizer.VALID_DIAGRAM_TYPES.
+VALID_DIAGRAM_TYPES = ("mindmap", "timeline", "flowchart", "auto")
+
 
 @dataclass
 class Config:
@@ -52,6 +55,8 @@ class Config:
     llm_base_url: str = DEFAULT_LLM_BASE_URL
     llm_model: str = DEFAULT_LLM_MODEL
     llm_api_key_env: str = "GROQ_API_KEY"
+    # Mermaid diagram type: mindmap | timeline | flowchart | auto.
+    diagram_type: str = "auto"
 
     @property
     def recordings_dir(self) -> Path:
@@ -84,6 +89,11 @@ class Config:
                 f"'{self.transcription_provider}'. "
                 f"Valid: {', '.join(VALID_TRANSCRIPTION_PROVIDERS)}"
             )
+        if self.diagram_type not in VALID_DIAGRAM_TYPES:
+            raise ValueError(
+                f"invalid diagram_type '{self.diagram_type}'. "
+                f"Valid: {', '.join(VALID_DIAGRAM_TYPES)}"
+            )
 
     def effective(self) -> dict:
         """Human-readable snapshot of the resolved config (secrets redacted)."""
@@ -98,6 +108,7 @@ class Config:
             "llm_model": self.llm_model,
             "llm_api_key_env": self.llm_api_key_env,
             "llm_api_key_set": "yes" if key else "no",
+            "diagram_type": self.diagram_type,
             "recordings_dir": str(self.recordings_dir),
             "transcripts_dir": str(self.transcripts_dir),
             "summaries_dir": str(self.summaries_dir),
@@ -149,6 +160,9 @@ def load_config(**overrides) -> Config:
     cfg.llm_model = llm.get("model", cfg.llm_model)
     cfg.llm_api_key_env = llm.get("api_key_env", cfg.llm_api_key_env)
 
+    diagrams = data.get("diagrams", {})
+    cfg.diagram_type = diagrams.get("type", cfg.diagram_type)
+
     # Environment overrides for the common knobs.
     if os.environ.get("CLASSSCRIBE_WORKSPACE"):
         cfg.workspace = Path(os.environ["CLASSSCRIBE_WORKSPACE"]).expanduser()
@@ -157,6 +171,8 @@ def load_config(**overrides) -> Config:
     if os.environ.get("CLASSSCRIBE_TRANSCRIPTION_PROVIDER"):
         cfg.transcription_provider = os.environ[
             "CLASSSCRIBE_TRANSCRIPTION_PROVIDER"]
+    if os.environ.get("CLASSSCRIBE_DIAGRAM_TYPE"):
+        cfg.diagram_type = os.environ["CLASSSCRIBE_DIAGRAM_TYPE"]
 
     # CLI overrides (highest priority); ignore None values.
     for key, value in overrides.items():
