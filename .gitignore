@@ -33,3 +33,9 @@ dist/
 
 # macOS
 .DS_Store
+
+# Never publish KiroCrew / Kiro agent data
+.kiro/
+**/.kiro/
+.kirocrew/
+**/.kirocrew/
