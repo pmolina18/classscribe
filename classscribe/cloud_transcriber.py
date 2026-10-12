@@ -34,7 +34,7 @@ def _fmt_timestamp(seconds: float, sep: str) -> str:
     """Format seconds as HH:MM:SS<sep>mmm (sep is ',' for SRT, '.' for VTT)."""
     if seconds < 0:
         seconds = 0.0
-    ms = int(round(seconds * 1000))
+    ms = round(seconds * 1000)
     h, ms = divmod(ms, 3_600_000)
     m, ms = divmod(ms, 60_000)
     s, ms = divmod(ms, 1000)
@@ -134,7 +134,7 @@ def transcribe_groq(
 
     print(f"Transcribing with Groq ({model})...")
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=300) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:500]

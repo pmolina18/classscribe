@@ -22,3 +22,14 @@ classscribe = "classscribe.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["classscribe*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Pyflakes (F) + a focused slice of pycodestyle (E) for real errors.
+# Deliberately NOT enabling flake8-bandit (S): this is a local CLI that shells
+# out to ffmpeg/whisper by design, so S603/S607 are noise here.
+select = ["F", "E4", "E7", "E9"]
+ignore = ["E701", "E702"]  # intentional one-line parser setup in cli.py.

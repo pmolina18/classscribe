@@ -78,7 +78,7 @@ def find_blackhole_index(name_hint: str = "blackhole") -> int:
     proc = subprocess.run(
         ["ffmpeg", "-hide_banner", "-f", "avfoundation",
          "-list_devices", "true", "-i", ""],
-        capture_output=True, text=True,
+        capture_output=True, text=True, check=False,
     )
     # ffmpeg prints the device list to stderr.
     in_audio = False

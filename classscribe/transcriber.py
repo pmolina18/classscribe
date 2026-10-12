@@ -46,7 +46,7 @@ def ensure_model(model_path: Path, model_url: str) -> Path:
             print(f"\r  {pct:3d}%", end="", flush=True)
 
     tmp = model_path.with_suffix(model_path.suffix + ".part")
-    urllib.request.urlretrieve(model_url, tmp, _hook)  # noqa: S310 (trusted URL)
+    urllib.request.urlretrieve(model_url, tmp, _hook)
     print()
     tmp.replace(model_path)
     return model_path
