@@ -89,6 +89,14 @@ class SummaryError(RuntimeError):
     pass
 
 
+def _version() -> str:
+    try:
+        from . import __version__
+        return __version__
+    except Exception:
+        return "0"
+
+
 def clean_mermaid(raw: str) -> str | None:
     """Extract a single ```mermaid ...``` block from an LLM response.
 
@@ -128,6 +136,10 @@ def _chat(base_url: str, model: str, api_key: str, system: str, user: str) -> st
 
     req = urllib.request.Request(url, data=payload, method="POST")
     req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    # A real User-Agent is required: the default "Python-urllib/x.y" is often
+    # rejected by Cloudflare at the api.groq.com edge with HTTP 403 code 1010.
+    req.add_header("User-Agent", f"classscribe/{_version()}")
     if api_key:
         req.add_header("Authorization", f"Bearer {api_key}")
 
@@ -136,6 +148,13 @@ def _chat(base_url: str, model: str, api_key: str, system: str, user: str) -> st
             body = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:500]
+        if e.code == 403 and "1010" in detail:
+            raise SummaryError(
+                "LLM endpoint returned a Cloudflare 403 (code 1010): the "
+                "request was blocked at the edge, not by your API key. This "
+                "usually means a missing/!blocked User-Agent or a network/VPN "
+                "that Cloudflare distrusts. Try again, or from another network."
+            ) from e
         raise SummaryError(f"LLM API error {e.code}: {detail}") from e
     except urllib.error.URLError as e:
         raise SummaryError(f"Could not reach LLM endpoint {url}: {e.reason}") from e
