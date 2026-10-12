@@ -2,8 +2,9 @@
 *.bin
 models/
 
-# User data
-ClassScribe/
+# User data (default workspace is ~/ClassScribe, outside the repo).
+# NOTE: do NOT add a `ClassScribe/` rule — on case-insensitive macOS it would
+# also ignore the `classscribe/` source package.
 recordings/
 transcripts/
 summaries/
