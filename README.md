@@ -16,10 +16,9 @@ and **Mermaid diagram** with a free LLM. All free, no subscriptions.
      play a lecture      ffmpeg capture      .txt/.srt/.vtt              .md study notes
 ```
 
-> **Status:** local whisper.cpp transcription works today. The Groq cloud
-> transcription backend is the configured default but is **not implemented yet**
-> ([tracked here](https://github.com/pmolina18/classscribe/issues)). Until it
-> lands, run with `--transcription-provider local` (see Usage).
+> **Both transcription backends work today:** `groq` (cloud, the default — no
+> local GPU or model download needed) and `local` (whisper.cpp, fully offline).
+> Pick one with `--transcription-provider` or in your config (see Usage).
 
 ## Why
 
@@ -33,7 +32,7 @@ Mac can play.
 - 🎙️ **Capture internal audio** on macOS via BlackHole (what you *hear*, cleanly, no microphone).
 - 📝 **Transcription, your choice of backend**:
   - `local` — whisper.cpp + `large-v3-turbo`, offline, private, GPU-accelerated (**available now**).
-  - `groq` — Groq Cloud free tier, no local GPU or model download needed (**coming soon**, default).
+  - `groq` — Groq Cloud free tier, no local GPU or model download needed (**default**).
 - 🧠 **Free AI summaries** via [Groq Cloud](https://console.groq.com) (free tier), or any OpenAI-compatible endpoint — including **Ollama** for 100% local, private summaries.
 - 📊 **Mermaid diagrams** from the lecture content — mindmap, timeline, flowchart, or `auto`. Renders natively on GitHub, VS Code and Obsidian; no image API, no extra key.
 - 🧩 **Outputs**: `.txt`, `.srt`, `.vtt` transcripts + `-summary.md`, `-outline.md` and `-diagram.md`.
@@ -98,33 +97,37 @@ config at it — see `.classscribe.toml.example`. No API key, nothing leaves you
 
 ## Usage
 
-> While the Groq transcription backend is in progress, add
-> `--transcription-provider local` to any transcribing command (or set
-> `[transcription] provider = "local"` in your config).
+> By default transcription uses **Groq** (cloud, free tier) — set
+> `GROQ_API_KEY` first. For fully offline transcription add
+> `--transcription-provider local` (after `classscribe setup`).
 
-**All in one** (record → transcribe → summarize):
+**All in one** (record → transcribe → summarize → diagram):
 
 ```bash
-classscribe pipeline my-lecture --transcription-provider local
-# plays? press Ctrl+C to stop → transcript + summary appear automatically
+classscribe pipeline my-lecture
+# press Ctrl+C to stop recording, or set a length: --duration 50m
 ```
+
+`--duration` accepts seconds (`90`), suffixes (`20s`, `5m`, `1h30m`) or clock
+form (`45:00`, `1:30:00`). Omit it to stop manually with Ctrl+C.
 
 **Step by step:**
 
 ```bash
-classscribe record my-lecture        # Ctrl+C to stop
-classscribe transcribe ~/ClassScribe/recordings/my-lecture-*.wav --transcription-provider local
+classscribe record my-lecture --duration 50m   # or omit --duration and Ctrl+C
+classscribe transcribe ~/ClassScribe/recordings/my-lecture-*.wav
 classscribe summarize ~/ClassScribe/transcripts/my-lecture-*.txt
 ```
 
 **Transcribe a file you already have** (no recording needed):
 
 ```bash
+classscribe transcribe ~/Downloads/lecture.mp4 --language es
+# fully offline instead of Groq:
 classscribe transcribe ~/Downloads/lecture.mp4 --language es --transcription-provider local
 ```
 
-**Make a diagram from a transcript** (summaries and diagrams use the cloud LLM,
-so no `--transcription-provider` needed):
+**Make a diagram from a transcript:**
 
 ```bash
 classscribe summarize ~/ClassScribe/transcripts/my-lecture.txt
