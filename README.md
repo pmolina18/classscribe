@@ -1,192 +1,228 @@
 # ClassScribe
 
-**Turn any audio playing on your Mac into study notes — local or cloud transcription, free AI summaries and diagrams.**
+[![CI](https://github.com/pmolina18/classscribe/actions/workflows/ci.yml/badge.svg)](https://github.com/pmolina18/classscribe/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-ClassScribe captures the internal audio of your Mac (a lecture video, a recorded
-call, a podcast), transcribes it with [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
-(local, offline, Metal-accelerated) or via [Groq Cloud](https://console.groq.com)
-(free tier, no local GPU needed), and generates a study **summary**, **outline**
-and **Mermaid diagram** with a free LLM. All free, no subscriptions.
+ClassScribe turns whatever is playing on your Mac into study notes. Start a
+recorded lecture, run one command, and you get a transcript, a summary, an
+outline and a concept map you can open straight on GitHub.
+
+I wrote it for my own degree. I study through recorded video lectures, and
+taking notes by hand was eating the time I wanted to spend actually studying.
+It works with any audio, though: talks, podcasts, meetings.
+
+Everything it uses is free. Transcription runs either on your machine with
+[whisper.cpp](https://github.com/ggerganov/whisper.cpp) or on
+[Groq](https://console.groq.com)'s free tier, and the notes come from a free
+LLM.
+
+## How it works
 
 ```
-┌───────────┐     ┌──────────────┐     ┌─────────────────────┐     ┌───────────────────────┐
-│  System   │ ──▶ │  BlackHole   │ ──▶ │  Transcription:     │ ──▶ │  LLM (Groq free)      │
-│  audio    │     │ (virtual mic)│     │  whisper.cpp / Groq │     │  summary+outline+diagram│
-└───────────┘     └──────────────┘     └─────────────────────┘     └───────────────────────┘
-     play a lecture      ffmpeg capture      .txt/.srt/.vtt              .md study notes
+your Mac's audio ─▶ BlackHole ─▶ transcription ─▶ LLM ─▶ notes
+                    (capture)    whisper.cpp       Groq   summary
+                                 or Groq Whisper          outline
+                                                          Mermaid diagram
 ```
 
-> **Both transcription backends work today:** `groq` (cloud, the default — no
-> local GPU or model download needed) and `local` (whisper.cpp, fully offline).
-> Pick one with `--transcription-provider` or in your config (see Usage).
+1. **Record.** [BlackHole](https://existential.audio/blackhole/) exposes the
+   system output as an input device, so ClassScribe records what you hear,
+   not what your microphone picks up.
+2. **Transcribe.** The audio goes to Groq's hosted Whisper (the default, no GPU
+   needed) or to a local whisper.cpp model that never leaves your Mac. Either
+   way you get `.txt`, `.srt` and `.vtt` files.
+3. **Write the notes.** The transcript is sent to an LLM, which produces a
+   summary, an outline and a Mermaid diagram. The prompts tell it to stick to
+   what was said in the lecture and not invent anything.
 
-## Why
+ClassScribe has no Python dependencies. The Groq calls are plain `urllib`
+requests, and the heavy lifting is done by ffmpeg and whisper.cpp.
 
-I built this to study for my university degree: record each video lecture, get a
-faithful transcript, and have an LLM turn it into a revision summary and a
-hierarchical outline — all automatically, all free. It works for any audio your
-Mac can play.
-
-## Features
-
-- 🎙️ **Capture internal audio** on macOS via BlackHole (what you *hear*, cleanly, no microphone).
-- 📝 **Transcription, your choice of backend**:
-  - `local` — whisper.cpp + `large-v3-turbo`, offline, private, GPU-accelerated (**available now**).
-  - `groq` — Groq Cloud free tier, no local GPU or model download needed (**default**).
-- 🧠 **Free AI summaries** via [Groq Cloud](https://console.groq.com) (free tier), or any OpenAI-compatible endpoint — including **Ollama** for 100% local, private summaries.
-- 📊 **Mermaid diagrams** from the lecture content — mindmap, timeline, flowchart, or `auto`. Renders natively on GitHub, VS Code and Obsidian; no image API, no extra key.
-- 🧩 **Outputs**: `.txt`, `.srt`, `.vtt` transcripts + `-summary.md`, `-outline.md` and `-diagram.md`.
-- 🛠️ **One command**: `classscribe pipeline` records → transcribes → summarizes → diagrams.
-- 🔎 **`classscribe config`** prints the effective configuration at any time.
-
-## Requirements (all free)
-
-| Tool | Install | Purpose |
-|------|---------|---------|
-| [BlackHole 2ch](https://existential.audio/blackhole/) | `brew install blackhole-2ch` | Capture internal audio (recording only) |
-| [ffmpeg](https://ffmpeg.org) | `brew install ffmpeg` | Audio I/O |
-| [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | `brew install whisper-cpp` | Local transcription (`local` backend) |
-| Python ≥ 3.11 | `brew install python` | Runs ClassScribe |
-| A free [Groq API key](https://console.groq.com/keys) | — | AI summaries (and cloud transcription) |
-
-> **macOS only** for recording (BlackHole + avfoundation). Transcription and
-> summarization work anywhere Python runs; the `local` backend additionally
-> needs whisper.cpp.
-
-## Install
+## Quick start
 
 ```bash
+brew install blackhole-2ch ffmpeg
 git clone https://github.com/pmolina18/classscribe.git
 cd classscribe
 pip install -e .
+
+export GROQ_API_KEY="your-groq-key"   # free at console.groq.com/keys
+
+classscribe pipeline my-first-lecture --duration 20s
 ```
 
-Using the **local** backend? Download the whisper model (~1.5 GB, one time):
+Before that last command, follow the one-time
+[audio routing](#audio-routing) step and start something playing. When it
+finishes, your files are in `~/ClassScribe/`.
 
-```bash
-classscribe setup
-```
+## Requirements
 
-(Not needed for the `groq` cloud backend.)
+| What | Install | Needed for |
+|------|---------|------------|
+| macOS | | Recording (BlackHole and avfoundation are Mac-only) |
+| Python 3.11+ | `brew install python` | Everything |
+| ffmpeg | `brew install ffmpeg` | Recording and audio conversion |
+| BlackHole 2ch | `brew install blackhole-2ch` | Recording |
+| Groq API key | [console.groq.com/keys](https://console.groq.com/keys) | Cloud transcription and notes |
+| whisper.cpp | `brew install whisper-cpp` | Only the `local` transcription backend |
 
-## Audio routing (one-time macOS setup)
+If you already have audio or video files, you can skip BlackHole and run
+`transcribe` on them directly. That part works on any OS with Python and ffmpeg.
 
-To capture what you hear *and* keep hearing it, create a **Multi-Output Device**:
+## Audio routing
+
+You need to do this once. It lets BlackHole capture the audio while you keep
+hearing it.
 
 1. Open **Audio MIDI Setup**.
-2. Click **+** (bottom-left) → **Create Multi-Output Device**.
-3. Check both **BlackHole 2ch** and your speakers/headphones.
-4. Enable **Drift Correction** on BlackHole.
-5. Before recording, set system output (🔊 menu) to that Multi-Output Device.
+2. Click **+** in the bottom-left corner and choose **Create Multi-Output Device**.
+3. Tick **BlackHole 2ch** and your speakers or headphones.
+4. Enable **Drift Correction** on the BlackHole row.
 
-## Configure the LLM
-
-Get a free key at [console.groq.com/keys](https://console.groq.com/keys), then:
-
-```bash
-export GROQ_API_KEY="your-groq-key"
-```
-
-> Groq rotates its model lineup. ClassScribe defaults to a current production
-> model (`openai/gpt-oss-20b`); if you ever get a `model_not_found` error, pick
-> another from [console.groq.com/docs/models](https://console.groq.com/docs/models)
-> and set it via `[llm] model` in your config.
-
-Prefer **fully local** summaries? Run [Ollama](https://ollama.com) and point the
-config at it — see `.classscribe.toml.example`. No API key, nothing leaves your Mac.
+Whenever you want to record, set your sound output to that Multi-Output Device
+from the menu bar. If you forget, the recording will be silent.
 
 ## Usage
 
-> By default transcription uses **Groq** (cloud, free tier) — set
-> `GROQ_API_KEY` first. For fully offline transcription add
-> `--transcription-provider local` (after `classscribe setup`).
-
-**All in one** (record → transcribe → summarize → diagram):
+### Record a lecture and get everything
 
 ```bash
-classscribe pipeline my-lecture
-# press Ctrl+C to stop recording, or set a length: --duration 50m
+classscribe pipeline history-unit-3 --duration 45m
 ```
 
-`--duration` accepts seconds (`90`), suffixes (`20s`, `5m`, `1h30m`) or clock
-form (`45:00`, `1:30:00`). Omit it to stop manually with Ctrl+C.
+`--duration` takes whatever is easiest to type: `90`, `20s`, `5m`, `1h30m`,
+`45:00` or `1:30:00`. If you leave it out, recording runs until you press
+Ctrl+C, and then the rest of the pipeline continues on its own.
 
-**Step by step:**
+### Run the steps one at a time
 
 ```bash
-classscribe record my-lecture --duration 50m   # or omit --duration and Ctrl+C
-classscribe transcribe ~/ClassScribe/recordings/my-lecture-*.wav
-classscribe summarize ~/ClassScribe/transcripts/my-lecture-*.txt
+classscribe record history-unit-3 --duration 45m
+classscribe transcribe ~/ClassScribe/recordings/history-unit-3-*.wav --language es
+classscribe summarize  ~/ClassScribe/transcripts/history-unit-3-*.txt
+classscribe diagram    ~/ClassScribe/transcripts/history-unit-3-*.txt
 ```
 
-**Transcribe a file you already have** (no recording needed):
+### Transcribe a file you already have
 
 ```bash
 classscribe transcribe ~/Downloads/lecture.mp4 --language es
-# fully offline instead of Groq:
+```
+
+Anything ffmpeg can read works: mp4, mkv, m4a, mp3, wav and more.
+
+### Transcribe offline
+
+```bash
+classscribe setup     # downloads the whisper model once, about 1.5 GB
 classscribe transcribe ~/Downloads/lecture.mp4 --language es --transcription-provider local
 ```
 
-**Make a diagram from a transcript:**
+Pass `--language` with the local backend. Without it, whisper.cpp assumes
+English.
 
-```bash
-classscribe summarize ~/ClassScribe/transcripts/my-lecture.txt
-classscribe diagram   ~/ClassScribe/transcripts/my-lecture.txt --diagram-type auto
-```
+### Diagrams
 
-The `-diagram.md` contains a Mermaid block that renders directly on GitHub:
+`classscribe diagram` writes a `-diagram.md` file containing a Mermaid block.
+GitHub, VS Code and Obsidian render it without any extra tooling. Here is a
+trimmed version of what it produced for my Intro to Politics lecture:
 
 ```mermaid
 mindmap
   root((Course topics))
-    Intro((Introduction))
-      1((What is politics))
-      2((Political power))
-    Structure((As structure))
-      6((The State))
-      8((Democracy))
-    Process((As process))
-      23((Parties))
+    Introduction
+      What is politics
+      Political power
+    Politics as structure
+      The State
+      Democracy
+    Politics as process
+      Political parties
 ```
 
-> Diagrams are LLM-generated and *occasionally* need a tiny manual edit (a
-> stray label character). ClassScribe extracts the Mermaid block automatically;
-> if the model returns no valid block, the raw response is kept with a warning
-> so you never lose output.
+Choose a shape with `--diagram-type mindmap`, `timeline` or `flowchart`. The
+default, `auto`, lets the model decide based on the content. LLM-generated
+Mermaid sometimes needs a small manual fix. If the model returns something
+ClassScribe can't parse, it keeps the raw output in the file with a warning,
+so you never lose the result.
 
-**See the resolved configuration** (handy for debugging; secrets are redacted):
+### Check your settings
 
 ```bash
 classscribe config
 ```
 
-Outputs land in `~/ClassScribe/{recordings,transcripts,summaries}/` (configurable).
+This prints the settings ClassScribe is actually using. It shows whether an
+API key is set but never prints the key.
+
+## Output
+
+Files are saved under `~/ClassScribe/` by default:
+
+```
+~/ClassScribe/
+├── recordings/    history-unit-3-20261012-101500.wav
+├── transcripts/   .txt  .srt  .vtt
+└── summaries/     -summary.md  -outline.md  -diagram.md
+```
 
 ## Configuration
 
-Copy `.classscribe.toml.example` to `.classscribe.toml` and edit, or use flags /
-env vars. Precedence: **CLI flag > env var > config file > built-in default**.
+Every setting can be passed as a flag, set as an environment variable, or
+written to a `.classscribe.toml` file (copy `.classscribe.toml.example` to
+start). Flags override environment variables, which override the file.
 
-| Setting | Flag | Env var | Config file |
-|---------|------|---------|-------------|
-| Workspace folder | `--workspace` | `CLASSSCRIBE_WORKSPACE` | `workspace` |
+| Setting | Flag | Environment variable | Config file |
+|---------|------|----------------------|-------------|
+| Output folder | `--workspace` | `CLASSSCRIBE_WORKSPACE` | `workspace` |
 | Language | `--language` | `CLASSSCRIBE_LANGUAGE` | `language` |
 | Transcription backend | `--transcription-provider` | `CLASSSCRIBE_TRANSCRIPTION_PROVIDER` | `[transcription] provider` |
 | Diagram type | `--diagram-type` | `CLASSSCRIBE_DIAGRAM_TYPE` | `[diagrams] type` |
-| LLM API key | — | `GROQ_API_KEY` | `[llm] api_key_env` |
+| API key | | `GROQ_API_KEY` | `[llm] api_key_env` (the variable's name) |
 
-Run `classscribe config` to see exactly what is in effect.
+### Models
 
-## Privacy & cost
+Out of the box, ClassScribe uses `whisper-large-v3-turbo` for transcription
+and `openai/gpt-oss-20b` for the notes. Groq retires models from time to time.
+If you get a `model_not_found` error, pick a current model from
+[Groq's model list](https://console.groq.com/docs/models) and set it with
+`[transcription] groq_model` or `[llm] model`.
 
-- **`local` transcription stays on your Mac** — whisper.cpp is fully offline.
-- **`groq` transcription** (when available) sends your audio to Groq's free-tier
-  cloud API.
-- **Summaries and diagrams** send the *transcript text* to the LLM endpoint you
-  choose. With Groq that's a free-tier cloud call; with Ollama it stays local.
-- Groq's free tier has rate limits and a 100 MB per-file cap for transcription
-  (fine for class recordings). No credit card.
+### Fully local
+
+You can keep everything on your machine by pointing the LLM settings at
+[Ollama](https://ollama.com) (the example config shows how) and using
+`--transcription-provider local`. Use the two together: the Groq transcription
+backend talks to the same endpoint as the LLM, so it won't work against Ollama.
+
+## Privacy and cost
+
+- The **local** backend never sends audio anywhere.
+- The **groq** backend uploads your audio to Groq. The free tier accepts files
+  up to 100 MB. ClassScribe's recordings are 16 kHz mono WAV, about 1.9 MB per
+  minute, so that limit is roughly 50 minutes of recording. For longer
+  lectures, use the local backend (no size limit) or transcribe a compressed
+  copy (an m4a or mp3 of the same lecture is far smaller).
+- Summaries and diagrams send the **transcript text** to whichever LLM you
+  configure: Groq by default, or Ollama if you want it to stay local.
+- Groq's free tier needs no credit card. It does have rate limits; check
+  [Groq's rate limits page](https://console.groq.com/docs/rate-limits) for
+  the current numbers.
+
+## Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e . pytest ruff
+ruff check classscribe tests
+pytest -q
+```
+
+CI runs the same checks on Python 3.11 and 3.12 for every push and pull
+request. Open issues are on the
+[issue tracker](https://github.com/pmolina18/classscribe/issues), and
+contributions are welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
