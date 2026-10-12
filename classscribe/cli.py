@@ -1,12 +1,12 @@
 """ClassScribe CLI.
 
 Commands:
-  classscribe record [LABEL]        Record internal audio (Ctrl+C to stop),
-                                    then transcribe and summarize it.
+  classscribe record [LABEL]        Record internal audio (Ctrl+C to stop).
   classscribe transcribe FILE       Transcribe an audio/video file.
   classscribe summarize TRANSCRIPT  Summarize an existing transcript.
   classscribe pipeline [LABEL]      record -> transcribe -> summarize.
-  classscribe setup                 Download the whisper model.
+  classscribe setup                 Download the local whisper model.
+  classscribe config                Print the effective configuration.
 """
 from __future__ import annotations
 
@@ -15,18 +15,47 @@ import sys
 from pathlib import Path
 
 from . import recorder, summarizer, transcriber
-from .config import load_config
+from .config import VALID_TRANSCRIPTION_PROVIDERS, load_config
 
 
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--workspace", help="Base folder for all outputs.")
-    p.add_argument("--language", help="Whisper language code (e.g. es, en).")
+    p.add_argument("--language", help="Transcription language code (e.g. es, en).")
+    p.add_argument(
+        "--transcription-provider", dest="transcription_provider",
+        choices=VALID_TRANSCRIPTION_PROVIDERS,
+        help="Transcription backend (default: groq).",
+    )
+
+
+def _run_transcription(cfg, src: Path) -> dict:
+    """Transcribe `src` using the configured provider. Returns output paths."""
+    out_base = cfg.transcripts_dir / src.stem
+    if cfg.transcription_provider == "local":
+        model = transcriber.ensure_model(cfg.resolved_model_path(), cfg.model_url)
+        return transcriber.transcribe(src, out_base, model, cfg.language)
+    # Default provider: groq (cloud). The cloud backend is not implemented yet
+    # (tracked separately); fail clearly instead of silently using local.
+    raise transcriber.TranscribeError(
+        "transcription_provider 'groq' (the default) is not implemented yet. "
+        "Use the local backend meanwhile: pass --transcription-provider local "
+        "(or set [transcription] provider = \"local\"), after `classscribe setup`."
+    )
 
 
 def cmd_setup(args, cfg) -> int:
     cfg.ensure_dirs()
     path = transcriber.ensure_model(cfg.resolved_model_path(), cfg.model_url)
     print(f"Model ready: {path}")
+    return 0
+
+
+def cmd_config(args, cfg) -> int:
+    eff = cfg.effective()
+    width = max(len(k) for k in eff)
+    print("Effective ClassScribe configuration:\n")
+    for key, value in eff.items():
+        print(f"  {key.ljust(width)}  {value}")
     return 0
 
 
@@ -39,10 +68,8 @@ def cmd_record(args, cfg) -> int:
 
 def cmd_transcribe(args, cfg) -> int:
     cfg.ensure_dirs()
-    model = transcriber.ensure_model(cfg.resolved_model_path(), cfg.model_url)
     src = Path(args.file).expanduser()
-    out_base = cfg.transcripts_dir / src.stem
-    outputs = transcriber.transcribe(src, out_base, model, cfg.language)
+    outputs = _run_transcription(cfg, src)
     print(f"\nTranscript: {outputs['txt']}")
     return 0
 
@@ -59,10 +86,8 @@ def cmd_summarize(args, cfg) -> int:
 
 def cmd_pipeline(args, cfg) -> int:
     cfg.ensure_dirs()
-    model = transcriber.ensure_model(cfg.resolved_model_path(), cfg.model_url)
     wav = recorder.record(cfg.recordings_dir, label=args.label)
-    out_base = cfg.transcripts_dir / wav.stem
-    outputs = transcriber.transcribe(wav, out_base, model, cfg.language)
+    outputs = _run_transcription(cfg, wav)
     summarizer.summarize(
         outputs["txt"], cfg.summaries_dir,
         cfg.llm_base_url, cfg.llm_model, cfg.llm_api_key(),
@@ -75,8 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="classscribe", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("setup", help="Download the whisper model.")
+    p = sub.add_parser("setup", help="Download the local whisper model.")
     _add_common(p); p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser("config", help="Print the effective configuration.")
+    _add_common(p); p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("record", help="Record internal audio.")
     p.add_argument("label", nargs="?", help="Optional label for the file.")
@@ -98,8 +126,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cfg = load_config(workspace=getattr(args, "workspace", None),
-                      language=getattr(args, "language", None))
+    try:
+        cfg = load_config(
+            workspace=getattr(args, "workspace", None),
+            language=getattr(args, "language", None),
+            transcription_provider=getattr(args, "transcription_provider", None),
+        )
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     try:
         return args.func(args, cfg)
     except (recorder.RecordError, transcriber.TranscribeError,

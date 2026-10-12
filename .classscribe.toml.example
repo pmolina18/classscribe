@@ -10,6 +10,14 @@ language = ""
 # Optional: override the whisper.cpp model path (defaults to <workspace>/models).
 # model_path = "~/ClassScribe/models/ggml-large-v3-turbo.bin"
 
+[transcription]
+# Which backend transcribes audio:
+#   "groq"  -> cloud (default; works without a local GPU or model download)
+#   "local" -> whisper.cpp, fully offline and private (run `classscribe setup`)
+provider = "groq"
+# Groq (cloud) speech-to-text model.
+groq_model = "whisper-large-v3-turbo"
+
 [llm]
 # Any OpenAI-compatible chat endpoint.
 # Groq Cloud (free tier) — default:

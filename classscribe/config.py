@@ -27,6 +27,13 @@ DEFAULT_MODEL_URL = (
 DEFAULT_LLM_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_LLM_MODEL = "llama-3.3-70b-versatile"
 
+# Transcription provider default. "groq" works without a local GPU/model;
+# "local" uses whisper.cpp fully offline. Default is cloud so the tool works
+# for users who cannot run models locally.
+DEFAULT_TRANSCRIPTION_PROVIDER = "groq"
+VALID_TRANSCRIPTION_PROVIDERS = ("groq", "local")
+DEFAULT_GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
+
 
 @dataclass
 class Config:
@@ -34,7 +41,11 @@ class Config:
     workspace: Path = field(default_factory=lambda: Path.home() / "ClassScribe")
     # Whisper language code, e.g. "es", "en". None = auto-detect.
     language: str | None = None
-    # Path to the whisper.cpp GGML model.
+    # Transcription provider: "groq" (cloud, default) or "local" (whisper.cpp).
+    transcription_provider: str = DEFAULT_TRANSCRIPTION_PROVIDER
+    # Groq (cloud) transcription model.
+    groq_whisper_model: str = DEFAULT_GROQ_WHISPER_MODEL
+    # Path to the whisper.cpp GGML model (used only by the "local" provider).
     model_path: Path | None = None
     model_url: str = DEFAULT_MODEL_URL
     # LLM (summaries). OpenAI-compatible. Groq by default.
@@ -65,6 +76,32 @@ class Config:
 
     def llm_api_key(self) -> str | None:
         return os.environ.get(self.llm_api_key_env)
+
+    def validate(self) -> None:
+        if self.transcription_provider not in VALID_TRANSCRIPTION_PROVIDERS:
+            raise ValueError(
+                f"invalid transcription_provider "
+                f"'{self.transcription_provider}'. "
+                f"Valid: {', '.join(VALID_TRANSCRIPTION_PROVIDERS)}"
+            )
+
+    def effective(self) -> dict:
+        """Human-readable snapshot of the resolved config (secrets redacted)."""
+        key = self.llm_api_key()
+        return {
+            "workspace": str(self.workspace),
+            "language": self.language or "(auto-detect)",
+            "transcription_provider": self.transcription_provider,
+            "groq_whisper_model": self.groq_whisper_model,
+            "local_model_path": str(self.resolved_model_path()),
+            "llm_base_url": self.llm_base_url,
+            "llm_model": self.llm_model,
+            "llm_api_key_env": self.llm_api_key_env,
+            "llm_api_key_set": "yes" if key else "no",
+            "recordings_dir": str(self.recordings_dir),
+            "transcripts_dir": str(self.transcripts_dir),
+            "summaries_dir": str(self.summaries_dir),
+        }
 
     def ensure_dirs(self) -> None:
         for d in (
@@ -101,6 +138,12 @@ def load_config(**overrides) -> Config:
     if "model_url" in data:
         cfg.model_url = data["model_url"]
 
+    transcription = data.get("transcription", {})
+    cfg.transcription_provider = transcription.get(
+        "provider", cfg.transcription_provider)
+    cfg.groq_whisper_model = transcription.get(
+        "groq_model", cfg.groq_whisper_model)
+
     llm = data.get("llm", {})
     cfg.llm_base_url = llm.get("base_url", cfg.llm_base_url)
     cfg.llm_model = llm.get("model", cfg.llm_model)
@@ -111,6 +154,9 @@ def load_config(**overrides) -> Config:
         cfg.workspace = Path(os.environ["CLASSSCRIBE_WORKSPACE"]).expanduser()
     if os.environ.get("CLASSSCRIBE_LANGUAGE"):
         cfg.language = os.environ["CLASSSCRIBE_LANGUAGE"]
+    if os.environ.get("CLASSSCRIBE_TRANSCRIPTION_PROVIDER"):
+        cfg.transcription_provider = os.environ[
+            "CLASSSCRIBE_TRANSCRIPTION_PROVIDER"]
 
     # CLI overrides (highest priority); ignore None values.
     for key, value in overrides.items():
@@ -121,4 +167,5 @@ def load_config(**overrides) -> Config:
         elif hasattr(cfg, key):
             setattr(cfg, key, value)
 
+    cfg.validate()
     return cfg
