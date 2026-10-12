@@ -133,8 +133,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("record", help="Record internal audio.")
     p.add_argument("label", nargs="?", help="Optional label for the file.")
-    p.add_argument("--duration", type=int, default=None,
-                   help="Stop after this many seconds (omit for Ctrl+C).")
+    p.add_argument("--duration", default=None, metavar="DURATION",
+                   help="Auto-stop after e.g. 90, 20s, 5m, 1h30m, or MM:SS "
+                        "(omit for Ctrl+C).")
     _add_common(p); p.set_defaults(func=cmd_record)
 
     p = sub.add_parser("transcribe", help="Transcribe an audio/video file.")
@@ -150,8 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("pipeline", help="record -> transcribe -> summarize.")
     p.add_argument("label", nargs="?")
-    p.add_argument("--duration", type=int, default=None,
-                   help="Stop recording after this many seconds (omit for Ctrl+C).")
+    p.add_argument("--duration", default=None, metavar="DURATION",
+                   help="Auto-stop recording after e.g. 90, 20s, 5m, 1h30m, "
+                        "or 45:00 (omit for Ctrl+C).")
     _add_common(p); p.set_defaults(func=cmd_pipeline)
 
     return parser

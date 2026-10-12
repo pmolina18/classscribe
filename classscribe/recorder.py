@@ -23,6 +23,48 @@ class RecordError(RuntimeError):
     pass
 
 
+def parse_duration(value: str | int | None) -> int | None:
+    """Parse a human duration into seconds.
+
+    Accepts: plain seconds ("90"), colon forms ("MM:SS", "HH:MM:SS"), and
+    suffix forms ("20s", "5m", "1h30m"). Returns None for None/empty input.
+    Raises RecordError on anything unparseable or non-positive.
+    """
+    if value is None:
+        return None
+    if isinstance(value, int):
+        total = value
+    else:
+        s = value.strip().lower()
+        if not s:
+            return None
+        if ":" in s:
+            parts = s.split(":")
+            if len(parts) > 3 or not all(p.isdigit() for p in parts):
+                raise RecordError(f"invalid duration '{value}' (use HH:MM:SS).")
+            nums = [int(p) for p in parts]
+            while len(nums) < 3:
+                nums.insert(0, 0)
+            h, m, sec = nums
+            total = h * 3600 + m * 60 + sec
+        elif s.isdigit():
+            total = int(s)
+        else:
+            # Suffix form: 1h30m, 5m, 20s (any order, any subset).
+            import re
+            matches = re.findall(r"(\d+)\s*([hms])", s)
+            if not matches or re.sub(r"\d+\s*[hms]\s*", "", s):
+                raise RecordError(
+                    f"invalid duration '{value}'. Use seconds (90), HH:MM:SS, "
+                    "or suffixes like 1h30m / 5m / 20s."
+                )
+            unit = {"h": 3600, "m": 60, "s": 1}
+            total = sum(int(n) * unit[u] for n, u in matches)
+    if total <= 0:
+        raise RecordError("duration must be a positive amount of time.")
+    return total
+
+
 def _require(binary: str) -> None:
     if shutil.which(binary) is None:
         raise RecordError(
@@ -59,16 +101,15 @@ def record(
     out_dir: Path,
     label: str | None = None,
     device_index: int | None = None,
-    duration: int | None = None,
+    duration: str | int | None = None,
 ) -> Path:
     """Record internal audio and return the WAV path.
 
-    If `duration` (seconds) is given, record exactly that long and stop
-    automatically. Otherwise record until Ctrl+C. ffmpeg exits non-zero on
-    SIGINT; that is expected and not an error.
+    If `duration` is given (seconds, HH:MM:SS, or 1h30m-style), record exactly
+    that long and stop automatically. Otherwise record until Ctrl+C. ffmpeg
+    exits non-zero on SIGINT; that is expected and not an error.
     """
-    if duration is not None and duration <= 0:
-        raise RecordError("duration must be a positive number of seconds.")
+    secs = parse_duration(duration)
     _require("ffmpeg")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -79,16 +120,16 @@ def record(
 
     print(f"Recording internal audio (BlackHole index {idx}).")
     print(f"Output: {out}")
-    if duration is not None:
-        print(f"Recording for {duration}s, then stopping automatically.\n",
+    if secs is not None:
+        print(f"Recording for {secs}s, then stopping automatically.\n",
               flush=True)
     else:
         print("Press Ctrl+C to stop.\n", flush=True)
 
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats",
            "-f", "avfoundation", "-i", f":{idx}", "-ac", "1", "-ar", "16000"]
-    if duration is not None:
-        cmd += ["-t", str(duration)]
+    if secs is not None:
+        cmd += ["-t", str(secs)]
     cmd.append(str(out))
 
     try:
