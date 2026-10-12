@@ -14,7 +14,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import recorder, summarizer, transcriber
+from . import cloud_transcriber, recorder, summarizer, transcriber
 from .config import (
     VALID_DIAGRAM_TYPES,
     VALID_TRANSCRIPTION_PROVIDERS,
@@ -43,12 +43,10 @@ def _run_transcription(cfg, src: Path) -> dict:
     if cfg.transcription_provider == "local":
         model = transcriber.ensure_model(cfg.resolved_model_path(), cfg.model_url)
         return transcriber.transcribe(src, out_base, model, cfg.language)
-    # Default provider: groq (cloud). The cloud backend is not implemented yet
-    # (tracked separately); fail clearly instead of silently using local.
-    raise transcriber.TranscribeError(
-        "transcription_provider 'groq' (the default) is not implemented yet. "
-        "Use the local backend meanwhile: pass --transcription-provider local "
-        "(or set [transcription] provider = \"local\"), after `classscribe setup`."
+    # Default provider: groq (cloud).
+    return cloud_transcriber.transcribe_groq(
+        src, out_base, cfg.llm_base_url, cfg.groq_whisper_model,
+        cfg.llm_api_key(), cfg.language,
     )
 
 
