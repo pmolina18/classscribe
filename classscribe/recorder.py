@@ -59,11 +59,16 @@ def record(
     out_dir: Path,
     label: str | None = None,
     device_index: int | None = None,
+    duration: int | None = None,
 ) -> Path:
-    """Record internal audio until Ctrl+C. Returns the WAV path.
+    """Record internal audio and return the WAV path.
 
-    ffmpeg exits non-zero on SIGINT; that is expected and not an error.
+    If `duration` (seconds) is given, record exactly that long and stop
+    automatically. Otherwise record until Ctrl+C. ffmpeg exits non-zero on
+    SIGINT; that is expected and not an error.
     """
+    if duration is not None and duration <= 0:
+        raise RecordError("duration must be a positive number of seconds.")
     _require("ffmpeg")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -74,15 +79,20 @@ def record(
 
     print(f"Recording internal audio (BlackHole index {idx}).")
     print(f"Output: {out}")
-    print("Press Ctrl+C to stop.\n", flush=True)
+    if duration is not None:
+        print(f"Recording for {duration}s, then stopping automatically.\n",
+              flush=True)
+    else:
+        print("Press Ctrl+C to stop.\n", flush=True)
+
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats",
+           "-f", "avfoundation", "-i", f":{idx}", "-ac", "1", "-ar", "16000"]
+    if duration is not None:
+        cmd += ["-t", str(duration)]
+    cmd.append(str(out))
 
     try:
-        subprocess.run(
-            ["ffmpeg", "-hide_banner", "-loglevel", "warning", "-stats",
-             "-f", "avfoundation", "-i", f":{idx}",
-             "-ac", "1", "-ar", "16000", str(out)],
-            check=False,
-        )
+        subprocess.run(cmd, check=False)
     except KeyboardInterrupt:
         pass
 

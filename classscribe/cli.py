@@ -68,7 +68,8 @@ def cmd_config(args, cfg) -> int:
 
 def cmd_record(args, cfg) -> int:
     cfg.ensure_dirs()
-    wav = recorder.record(cfg.recordings_dir, label=args.label)
+    wav = recorder.record(cfg.recordings_dir, label=args.label,
+                          duration=args.duration)
     print(f"\nRecorded: {wav}")
     return 0
 
@@ -104,7 +105,8 @@ def cmd_diagram(args, cfg) -> int:
 
 def cmd_pipeline(args, cfg) -> int:
     cfg.ensure_dirs()
-    wav = recorder.record(cfg.recordings_dir, label=args.label)
+    wav = recorder.record(cfg.recordings_dir, label=args.label,
+                          duration=args.duration)
     outputs = _run_transcription(cfg, wav)
     summarizer.summarize(
         outputs["txt"], cfg.summaries_dir,
@@ -131,6 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("record", help="Record internal audio.")
     p.add_argument("label", nargs="?", help="Optional label for the file.")
+    p.add_argument("--duration", type=int, default=None,
+                   help="Stop after this many seconds (omit for Ctrl+C).")
     _add_common(p); p.set_defaults(func=cmd_record)
 
     p = sub.add_parser("transcribe", help="Transcribe an audio/video file.")
@@ -146,6 +150,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("pipeline", help="record -> transcribe -> summarize.")
     p.add_argument("label", nargs="?")
+    p.add_argument("--duration", type=int, default=None,
+                   help="Stop recording after this many seconds (omit for Ctrl+C).")
     _add_common(p); p.set_defaults(func=cmd_pipeline)
 
     return parser
