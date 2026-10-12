@@ -20,9 +20,10 @@ groq_model = "whisper-large-v3-turbo"
 
 [llm]
 # Any OpenAI-compatible chat endpoint.
-# Groq Cloud (free tier) — default:
+# Groq Cloud (free tier) — default. Use a CURRENT model (Groq rotates them;
+# see https://console.groq.com/docs/models):
 base_url = "https://api.groq.com/openai/v1"
-model = "llama-3.3-70b-versatile"
+model = "openai/gpt-oss-20b"
 api_key_env = "GROQ_API_KEY"
 
 # Fully local & private alternative (Ollama) — no API key needed:

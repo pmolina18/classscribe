@@ -24,8 +24,11 @@ DEFAULT_MODEL_URL = (
 )
 
 # Groq free-tier default. Swap via config/env for any OpenAI-compatible endpoint.
+# Model must be a currently-available Groq production model: Groq retired
+# llama-3.3-70b-versatile for free/dev tiers (Aug 2026). gpt-oss-20b is a
+# current, fast production model. See https://console.groq.com/docs/models
 DEFAULT_LLM_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_LLM_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_LLM_MODEL = "openai/gpt-oss-20b"
 
 # Transcription provider default. "groq" works without a local GPU/model;
 # "local" uses whisper.cpp fully offline. Default is cloud so the tool works

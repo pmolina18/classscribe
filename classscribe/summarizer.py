@@ -155,6 +155,13 @@ def _chat(base_url: str, model: str, api_key: str, system: str, user: str) -> st
                 "usually means a missing/!blocked User-Agent or a network/VPN "
                 "that Cloudflare distrusts. Try again, or from another network."
             ) from e
+        if e.code == 404 and "model_not_found" in detail:
+            raise SummaryError(
+                f"The model '{model}' is not available on your account/tier. "
+                "Groq rotates models (e.g. llama-3.3-70b-versatile was retired). "
+                "Set a current one via [llm] model or by checking "
+                "https://console.groq.com/docs/models (e.g. openai/gpt-oss-20b)."
+            ) from e
         raise SummaryError(f"LLM API error {e.code}: {detail}") from e
     except urllib.error.URLError as e:
         raise SummaryError(f"Could not reach LLM endpoint {url}: {e.reason}") from e
